@@ -1,19 +1,28 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { Project } from '../models/project.model';
 
 const STORAGE_KEY = 'manageme_projects';
+const ACTIVE_PROJECT_KEY = 'manageme_active_project';
 
 @Injectable({
   providedIn: 'root',
 })
 export class ProjectStorageService {
   private projectsSignal = signal<Project[]>([]);
+  private activeProjectIdSignal = signal<string | null>(null);
 
   readonly projects = this.projectsSignal.asReadonly();
+  readonly activeProjectId = this.activeProjectIdSignal.asReadonly();
+
+  readonly activeProject = computed(() => {
+    const id = this.activeProjectIdSignal();
+    return id ? this.projectsSignal().find((p) => p.id === id) : undefined;
+  });
 
   constructor() {
     if (typeof localStorage !== 'undefined') {
       this.projectsSignal.set(this.loadFromStorage());
+      this.activeProjectIdSignal.set(this.loadActiveProjectId());
     }
   }
 
@@ -22,10 +31,24 @@ export class ProjectStorageService {
     return data ? JSON.parse(data) : [];
   }
 
+  private loadActiveProjectId(): string | null {
+    return localStorage.getItem(ACTIVE_PROJECT_KEY);
+  }
+
   private saveToStorage(projects: Project[]): void {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
     this.projectsSignal.set(projects);
+  }
+
+  private saveActiveProjectId(id: string | null): void {
+    if (typeof localStorage === 'undefined') return;
+    if (id) {
+      localStorage.setItem(ACTIVE_PROJECT_KEY, id);
+    } else {
+      localStorage.removeItem(ACTIVE_PROJECT_KEY);
+    }
+    this.activeProjectIdSignal.set(id);
   }
 
   getAll(): Project[] {
@@ -58,12 +81,24 @@ export class ProjectStorageService {
   }
 
   delete(id: string): boolean {
-    const projects = this.projects();
+    const projects = this.projectsSignal();
     const index = projects.findIndex((p) => p.id === id);
     if (index === -1) return false;
 
     projects.splice(index, 1);
     this.saveToStorage(projects);
+
+    if (this.activeProjectIdSignal() === id) {
+      this.clearActiveProject();
+    }
     return true;
+  }
+
+  setActiveProject(id: string | null): void {
+    this.saveActiveProjectId(id);
+  }
+
+  clearActiveProject(): void {
+    this.saveActiveProjectId(null);
   }
 }
