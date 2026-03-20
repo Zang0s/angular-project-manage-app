@@ -1,26 +1,43 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { StoryStorageService } from '../../services/story-storage.service';
-import { ProjectStorageService } from '../../services/project-storage.service';
+import { RouterLink } from '@angular/router';
 import { TaskStorageService } from '../../services/task-storage.service';
+import { ProjectStorageService } from '../../services/project-storage.service';
+import { StoryStorageService } from '../../services/story-storage.service';
 import { UserService } from '../../services/user.service';
-import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
+import { Task, TaskPriority, TaskStatus } from '../../models/task.model';
 
 @Component({
-  selector: 'app-stories',
-  imports: [CommonModule, FormsModule],
+  selector: 'app-tasks',
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     @if (!projectStorage.activeProject()) {
       <div class="no-project">
-        <p>Wybierz projekt, aby zobaczyć historyjki</p>
+        <p>Wybierz projekt, aby zobaczyć zadania</p>
       </div>
     } @else {
-      <div class="stories-container">
+      <div class="tasks-container">
         <div class="form-card">
-          <h2>{{ editingId() ? 'Edytuj historyjkę' : 'Dodaj nową historyjkę' }}</h2>
-          <form (ngSubmit)="saveStory()">
+          <h2>{{ editingId() ? 'Edytuj zadanie' : 'Dodaj nowe zadanie' }}</h2>
+          <form (ngSubmit)="saveTask()">
             <div class="form-row">
+              <div class="form-group">
+                <label for="story">Historyjka</label>
+                <select
+                  id="story"
+                  [(ngModel)]="formData.storyId"
+                  name="storyId"
+                  required
+                  [disabled]="!!editingId()"
+                >
+                  <option value="">Wybierz historyjkę...</option>
+                  @for (story of projectStories(); track story.id) {
+                    <option [value]="story.id">{{ story.nazwa }}</option>
+                  }
+                </select>
+              </div>
+
               <div class="form-group">
                 <label for="nazwa">Nazwa</label>
                 <input
@@ -29,10 +46,12 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
                   [(ngModel)]="formData.nazwa"
                   name="nazwa"
                   required
-                  placeholder="Wprowadź nazwę"
+                  placeholder="Nazwa zadania"
                 />
               </div>
+            </div>
 
+            <div class="form-row">
               <div class="form-group">
                 <label for="priorytet">Priorytet</label>
                 <select id="priorytet" [(ngModel)]="formData.priorytet" name="priorytet">
@@ -43,13 +62,27 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
               </div>
 
               <div class="form-group">
-                <label for="stan">Stan</label>
-                <select id="stan" [(ngModel)]="formData.stan" name="stan">
-                  <option value="todo">Do zrobienia</option>
-                  <option value="doing">W trakcie</option>
-                  <option value="done">Zrobione</option>
-                </select>
+                <label for="czas">Przewidywany czas (h)</label>
+                <input
+                  type="number"
+                  id="czas"
+                  [(ngModel)]="formData.przewidywanyCzas"
+                  name="przewidywanyCzas"
+                  min="1"
+                  value="1"
+                />
               </div>
+
+              @if (editingId()) {
+                <div class="form-group">
+                  <label for="stan">Stan</label>
+                  <select id="stan" [(ngModel)]="formData.stan" name="stan">
+                    <option value="todo">Do zrobienia</option>
+                    <option value="doing">W trakcie</option>
+                    <option value="done">Zrobione</option>
+                  </select>
+                </div>
+              }
             </div>
 
             <div class="form-group">
@@ -59,7 +92,7 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
                 [(ngModel)]="formData.opis"
                 name="opis"
                 rows="2"
-                placeholder="Wprowadź opis"
+                placeholder="Opis zadania"
               ></textarea>
             </div>
 
@@ -76,7 +109,7 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
 
         <div class="filter-tabs">
           <button [class.active]="activeFilter() === 'all'" (click)="setFilter('all')">
-            Wszystkie ({{ filteredStories().length }})
+            Wszystkie ({{ filteredTasks().length }})
           </button>
           <button [class.active]="activeFilter() === 'todo'" (click)="setFilter('todo')">
             Do zrobienia ({{ getTodoCount() }})
@@ -89,28 +122,30 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
           </button>
         </div>
 
-        <div class="stories-list">
-          @if (filteredStories().length === 0) {
-            <p class="empty-message">Brak historyjek do wyświetlenia</p>
+        <div class="tasks-list">
+          @if (filteredTasks().length === 0) {
+            <p class="empty-message">Brak zadań do wyświetlenia</p>
           } @else {
-            @for (story of filteredStories(); track story.id) {
-              <div class="story-card" [class]="'priority-' + story.priorytet">
-                <div class="story-header">
-                  <h3>{{ story.nazwa }}</h3>
-                  <span class="priority-badge" [class]="'priority-' + story.priorytet">
-                    {{ getPriorityLabel(story.priorytet) }}
+            @for (task of filteredTasks(); track task.id) {
+              <div class="task-card" [class]="'priority-' + task.priorytet">
+                <div class="task-header">
+                  <h3>{{ task.nazwa }}</h3>
+                  <span class="priority-badge" [class]="'priority-' + task.priorytet">
+                    {{ getPriorityLabel(task.priorytet) }}
                   </span>
                 </div>
-                <p class="story-description">{{ story.opis || 'Brak opisu' }}</p>
-                <div class="story-meta">
-                  <span class="story-status" [class]="'status-' + story.stan">
-                    {{ getStatusLabel(story.stan) }}
+                <p class="task-description">{{ task.opis || 'Brak opisu' }}</p>
+                <div class="task-meta">
+                  <span class="task-status" [class]="'status-' + task.stan">
+                    {{ getStatusLabel(task.stan) }}
                   </span>
-                  <span class="story-date">{{ story.dataUtworzenia | date: 'dd.MM.yyyy' }}</span>
+                  <span class="task-story">{{ getStoryName(task.storyId) }}</span>
+                  <span class="task-time">{{ task.przewidywanyCzas }}h</span>
                 </div>
-                <div class="story-actions">
-                  <button class="btn-edit" (click)="editStory(story)">Edytuj</button>
-                  <button class="btn-delete" (click)="deleteStory(story.id)">Usuń</button>
+                <div class="task-actions">
+                  <a [routerLink]="['/tasks', task.id]" class="btn-details">Szczegóły</a>
+                  <button class="btn-edit" (click)="editTask(task)">Edytuj</button>
+                  <button class="btn-delete" (click)="deleteTask(task.id)">Usuń</button>
                 </div>
               </div>
             }
@@ -127,7 +162,7 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
         color: #666;
       }
 
-      .stories-container {
+      .tasks-container {
         max-width: 900px;
         margin: 0 auto;
         padding: 2rem;
@@ -151,7 +186,6 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
         display: flex;
         gap: 1rem;
       }
-
       .form-row .form-group {
         flex: 1;
       }
@@ -177,7 +211,6 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
         font-size: 1rem;
         font-family: inherit;
       }
-
       input:focus,
       textarea:focus,
       select:focus {
@@ -190,13 +223,16 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
         gap: 1rem;
       }
 
-      button {
+      button,
+      .btn-details {
         padding: 0.75rem 1.5rem;
         border: none;
         border-radius: 4px;
         font-size: 1rem;
         cursor: pointer;
         transition: background-color 0.2s;
+        text-decoration: none;
+        display: inline-block;
       }
 
       .btn-primary {
@@ -206,7 +242,6 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
       .btn-primary:hover {
         background: #0056b3;
       }
-
       .btn-secondary {
         background: #6c757d;
         color: white;
@@ -220,50 +255,46 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
         gap: 0.5rem;
         margin-bottom: 1.5rem;
       }
-
       .filter-tabs button {
         padding: 0.5rem 1rem;
         background: #e9ecef;
         color: #333;
       }
-
       .filter-tabs button.active {
         background: #007bff;
         color: white;
       }
 
-      .stories-list {
+      .tasks-list {
         display: flex;
         flex-direction: column;
         gap: 1rem;
       }
 
-      .story-card {
+      .task-card {
         background: #fff;
         padding: 1.25rem;
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         border-left: 4px solid #ddd;
       }
-
-      .story-card.priority-niski {
+      .task-card.priority-niski {
         border-left-color: #28a745;
       }
-      .story-card.priority-sredni {
+      .task-card.priority-sredni {
         border-left-color: #ffc107;
       }
-      .story-card.priority-wysoki {
+      .task-card.priority-wysoki {
         border-left-color: #dc3545;
       }
 
-      .story-header {
+      .task-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 0.5rem;
       }
-
-      .story-header h3 {
+      .task-header h3 {
         margin: 0;
         color: #333;
       }
@@ -274,7 +305,6 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
         font-size: 0.75rem;
         font-weight: 600;
       }
-
       .priority-badge.priority-niski {
         background: #d4edda;
         color: #155724;
@@ -288,46 +318,58 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
         color: #721c24;
       }
 
-      .story-description {
+      .task-description {
         color: #666;
         margin-bottom: 0.75rem;
       }
 
-      .story-meta {
+      .task-meta {
         display: flex;
         gap: 1rem;
         margin-bottom: 0.75rem;
         font-size: 0.875rem;
+        flex-wrap: wrap;
       }
 
-      .story-status {
+      .task-status {
         padding: 0.25rem 0.5rem;
         border-radius: 4px;
         font-weight: 500;
       }
-
-      .story-status.status-todo {
+      .task-status.status-todo {
         background: #e9ecef;
         color: #495057;
       }
-      .story-status.status-doing {
+      .task-status.status-doing {
         background: #cce5ff;
         color: #004085;
       }
-      .story-status.status-done {
+      .task-status.status-done {
         background: #d4edda;
         color: #155724;
       }
 
-      .story-date {
+      .task-story {
+        color: #666;
+      }
+      .task-time {
         color: #666;
       }
 
-      .story-actions {
+      .task-actions {
         display: flex;
         gap: 0.5rem;
       }
 
+      .btn-details {
+        background: #17a2b8;
+        color: white;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
+      .btn-details:hover {
+        background: #138496;
+      }
       .btn-edit {
         background: #28a745;
         color: white;
@@ -337,7 +379,6 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
       .btn-edit:hover {
         background: #1e7e34;
       }
-
       .btn-delete {
         background: #dc3545;
         color: white;
@@ -357,86 +398,93 @@ import { Story, StoryPriority, StoryStatus } from '../../models/story.model';
     `,
   ],
 })
-export class StoriesComponent {
-  storyStorage = inject(StoryStorageService);
-  projectStorage = inject(ProjectStorageService);
+export class TasksComponent {
   taskStorage = inject(TaskStorageService);
+  projectStorage = inject(ProjectStorageService);
+  storyStorage = inject(StoryStorageService);
   userService = inject(UserService);
 
-  activeFilter = signal<StoryStatus | 'all'>('all');
+  activeFilter = signal<TaskStatus | 'all'>('all');
   editingId = signal<string | null>(null);
 
   formData = {
+    storyId: '',
     nazwa: '',
     opis: '',
-    priorytet: 'sredni' as StoryPriority,
-    stan: 'todo' as StoryStatus,
+    priorytet: 'sredni' as TaskPriority,
+    przewidywanyCzas: 1,
+    stan: 'todo' as TaskStatus,
   };
 
-  filteredStories = computed(() => {
+  projectStories = computed(() => {
+    const projectId = this.projectStorage.activeProject()?.id;
+    return projectId ? this.storyStorage.getByProjectId(projectId) : [];
+  });
+
+  filteredTasks = computed(() => {
     const projectId = this.projectStorage.activeProject()?.id;
     if (!projectId) return [];
 
-    const stories = this.storyStorage.getByProjectId(projectId);
+    const tasks = this.taskStorage.getByProjectId(projectId);
     const filter = this.activeFilter();
 
-    if (filter === 'all') return stories;
-    return stories.filter((s) => s.stan === filter);
+    if (filter === 'all') return tasks;
+    return tasks.filter((t) => t.stan === filter);
   });
 
   getTodoCount(): number {
     const projectId = this.projectStorage.activeProject()?.id;
-    return projectId ? this.storyStorage.getByProjectAndStatus(projectId, 'todo').length : 0;
+    if (!projectId) return 0;
+    return this.taskStorage.getByProjectId(projectId).filter((t) => t.stan === 'todo').length;
   }
 
   getDoingCount(): number {
     const projectId = this.projectStorage.activeProject()?.id;
-    return projectId ? this.storyStorage.getByProjectAndStatus(projectId, 'doing').length : 0;
+    if (!projectId) return 0;
+    return this.taskStorage.getByProjectId(projectId).filter((t) => t.stan === 'doing').length;
   }
 
   getDoneCount(): number {
     const projectId = this.projectStorage.activeProject()?.id;
-    return projectId ? this.storyStorage.getByProjectAndStatus(projectId, 'done').length : 0;
+    if (!projectId) return 0;
+    return this.taskStorage.getByProjectId(projectId).filter((t) => t.stan === 'done').length;
   }
 
-  setFilter(filter: StoryStatus | 'all'): void {
+  setFilter(filter: TaskStatus | 'all'): void {
     this.activeFilter.set(filter);
   }
 
-  saveStory(): void {
-    if (!this.formData.nazwa.trim()) return;
-
-    const projectId = this.projectStorage.activeProject()?.id;
-    if (!projectId) return;
+  saveTask(): void {
+    if (!this.formData.nazwa.trim() || !this.formData.storyId) return;
 
     const id = this.editingId();
     if (id) {
-      this.storyStorage.update(id, this.formData);
+      this.taskStorage.update(id, this.formData);
     } else {
-      this.storyStorage.create({
+      this.taskStorage.create({
         ...this.formData,
-        projektId: projectId,
-        wlascicielId: this.userService.currentUser().id,
+        przypisanyUzytkownikId: null,
       });
     }
 
     this.resetForm();
   }
 
-  editStory(story: Story): void {
-    this.editingId.set(story.id);
+  editTask(task: Task): void {
+    this.editingId.set(task.id);
     this.formData = {
-      nazwa: story.nazwa,
-      opis: story.opis,
-      priorytet: story.priorytet,
-      stan: story.stan,
+      storyId: task.storyId,
+      nazwa: task.nazwa,
+      opis: task.opis,
+      priorytet: task.priorytet,
+      przewidywanyCzas: task.przewidywanyCzas,
+      stan: task.stan,
     };
   }
 
-  deleteStory(id: string): void {
-    if (confirm('Czy na pewno chcesz usunąć tę historyjkę wraz ze wszystkimi zadaniami?')) {
-      this.taskStorage.deleteByStoryId(id);
-      this.storyStorage.delete(id);
+  deleteTask(id: string): void {
+    if (confirm('Czy na pewno chcesz usunąć to zadanie?')) {
+      this.taskStorage.delete(id);
       if (this.editingId() === id) {
         this.cancelEdit();
       }
@@ -449,11 +497,23 @@ export class StoriesComponent {
 
   private resetForm(): void {
     this.editingId.set(null);
-    this.formData = { nazwa: '', opis: '', priorytet: 'sredni', stan: 'todo' };
+    this.formData = {
+      storyId: '',
+      nazwa: '',
+      opis: '',
+      priorytet: 'sredni',
+      przewidywanyCzas: 1,
+      stan: 'todo',
+    };
   }
 
-  getPriorityLabel(priority: StoryPriority): string {
-    const labels: Record<StoryPriority, string> = {
+  getStoryName(storyId: string): string {
+    const story = this.storyStorage.getById(storyId);
+    return story ? story.nazwa : 'Nieznana';
+  }
+
+  getPriorityLabel(priority: TaskPriority): string {
+    const labels: Record<TaskPriority, string> = {
       niski: 'Niski',
       sredni: 'Średni',
       wysoki: 'Wysoki',
@@ -461,8 +521,8 @@ export class StoriesComponent {
     return labels[priority];
   }
 
-  getStatusLabel(status: StoryStatus): string {
-    const labels: Record<StoryStatus, string> = {
+  getStatusLabel(status: TaskStatus): string {
+    const labels: Record<TaskStatus, string> = {
       todo: 'Do zrobienia',
       doing: 'W trakcie',
       done: 'Zrobione',
