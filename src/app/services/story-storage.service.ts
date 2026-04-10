@@ -1,5 +1,6 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { Story, StoryStatus } from '../models/story.model';
+import { NotificationService } from './notification.service';
 
 const STORAGE_KEY = 'manageme_stories';
 
@@ -11,7 +12,7 @@ export class StoryStorageService {
 
   readonly stories = this.storiesSignal.asReadonly();
 
-  constructor() {
+  constructor(private notificationService: NotificationService) {
     if (typeof localStorage !== 'undefined') {
       this.storiesSignal.set(this.loadFromStorage());
     }
@@ -52,6 +53,14 @@ export class StoryStorageService {
     };
     const stories = [...this.storiesSignal(), newStory];
     this.saveToStorage(stories);
+
+    this.notificationService.send({
+      title: 'Przypisanie do historyjki',
+      message: `Przypisano Ci historyjkę "${newStory.nazwa}".`,
+      priority: 'high',
+      recipientId: newStory.wlascicielId,
+    });
+
     return newStory;
   }
 
@@ -60,9 +69,21 @@ export class StoryStorageService {
     const index = stories.findIndex((s) => s.id === id);
     if (index === -1) return undefined;
 
+    const previous = stories[index];
+
     const updated = { ...stories[index], ...updates };
     stories[index] = updated;
     this.saveToStorage(stories);
+
+    if (updates.wlascicielId && updates.wlascicielId !== previous.wlascicielId) {
+      this.notificationService.send({
+        title: 'Przypisanie do historyjki',
+        message: `Przypisano Ci historyjkę "${updated.nazwa}".`,
+        priority: 'high',
+        recipientId: updates.wlascicielId,
+      });
+    }
+
     return updated;
   }
 

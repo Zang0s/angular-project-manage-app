@@ -1,5 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { Project } from '../models/project.model';
+import { UserService } from './user.service';
+import { NotificationService } from './notification.service';
 
 const STORAGE_KEY = 'manageme_projects';
 const ACTIVE_PROJECT_KEY = 'manageme_active_project';
@@ -19,7 +21,10 @@ export class ProjectStorageService {
     return id ? this.projectsSignal().find((p) => p.id === id) : undefined;
   });
 
-  constructor() {
+  constructor(
+    private userService: UserService,
+    private notificationService: NotificationService,
+  ) {
     if (typeof localStorage !== 'undefined') {
       this.projectsSignal.set(this.loadFromStorage());
       this.activeProjectIdSignal.set(this.loadActiveProjectId());
@@ -66,6 +71,17 @@ export class ProjectStorageService {
     };
     const projects = [...this.projects(), newProject];
     this.saveToStorage(projects);
+
+    const admins = this.userService.getByRole('admin');
+    this.notificationService.sendMany(
+      admins.map((admin) => ({
+        title: 'Utworzono nowy projekt',
+        message: `Projekt "${newProject.nazwa}" został utworzony.`,
+        priority: 'high' as const,
+        recipientId: admin.id,
+      })),
+    );
+
     return newProject;
   }
 
