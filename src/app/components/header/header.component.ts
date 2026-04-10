@@ -5,10 +5,11 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { UserService } from '../../services/user.service';
 import { ProjectStorageService } from '../../services/project-storage.service';
 import { ThemeService } from '../../services/theme.service';
+import { NotificationBadgeComponent } from '../notification-badge/notification-badge.component';
 
 @Component({
   selector: 'app-header',
-  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive],
+  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive, NotificationBadgeComponent],
   template: `
     <header class="header">
       <nav class="nav-left">
@@ -62,6 +63,21 @@ import { ThemeService } from '../../services/theme.service';
           </svg>
           <span>Kanban</span>
         </a>
+        <a routerLink="/notifications" routerLinkActive="active" class="nav-link">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="icon"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fill-rule="evenodd"
+              d="M10 2a6 6 0 00-6 6v3.586L2.293 13.293A1 1 0 003 15h14a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zm-2 14a2 2 0 104 0H8z"
+              clip-rule="evenodd"
+            />
+          </svg>
+          <span>Powiadomienia</span>
+        </a>
         <a routerLink="/projects" routerLinkActive="active" class="nav-link">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -107,6 +123,7 @@ import { ThemeService } from '../../services/theme.service';
       </div>
 
       <div class="header-right">
+        <app-notification-badge></app-notification-badge>
         <button class="theme-toggle" (click)="themeService.toggle()" [title]="getThemeLabel()">
           @if (themeService.isDark()) {
             <svg

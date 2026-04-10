@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
-import { Task, TaskPriority, TaskStatus } from '../models/task.model';
+import { Task, TaskStatus } from '../models/task.model';
 import { StoryStorageService } from './story-storage.service';
+import { NotificationService } from './notification.service';
 
 const STORAGE_KEY = 'manageme_tasks';
 
@@ -12,7 +13,10 @@ export class TaskStorageService {
 
   readonly tasks = this.tasksSignal.asReadonly();
 
-  constructor(private storyStorage: StoryStorageService) {
+  constructor(
+    private storyStorage: StoryStorageService,
+    private notificationService: NotificationService,
+  ) {
     if (typeof localStorage !== 'undefined') {
       this.tasksSignal.set(this.loadFromStorage());
     }
@@ -65,8 +69,17 @@ export class TaskStorageService {
       dataZakonczenia: null,
       zrealizowaneRoboczogodziny: 0,
     };
+
     const tasks = [...this.tasksSignal(), newTask];
     this.saveToStorage(tasks);
+
+    this.notifyStoryOwner(
+      newTask.storyId,
+      'Nowe zadanie w historyjce',
+      `Dodano zadanie "${newTask.nazwa}".`,
+      'medium',
+    );
+
     return newTask;
   }
 
@@ -75,25 +88,65 @@ export class TaskStorageService {
     const index = tasks.findIndex((t) => t.id === id);
     if (index === -1) return undefined;
 
-    const updated = { ...tasks[index], ...updates };
-    tasks[index] = updated;
-    this.saveToStorage(tasks);
-    return updated;
+    const previous = tasks[index];
+    const next = { ...previous, ...updates };
+
+    if (previous.stan !== next.stan) {
+      if (next.stan === 'doing' && !next.dataStartu) {
+        next.dataStartu = new Date().toISOString();
+      }
+
+      if (next.stan === 'done' && !next.dataZakonczenia) {
+        next.dataZakonczenia = new Date().toISOString();
+      }
+    }
+
+    const updatedTasks = [...tasks];
+    updatedTasks[index] = next;
+    this.saveToStorage(updatedTasks);
+
+    if (previous.stan !== next.stan) {
+      if (next.stan === 'doing') {
+        this.updateStoryIfNeeded(next.storyId, 'doing');
+        this.notifyStoryOwner(
+          next.storyId,
+          'Zmiana statusu zadania',
+          `Zadanie "${next.nazwa}" zmieniło status na "doing".`,
+          'low',
+        );
+      }
+
+      if (next.stan === 'done') {
+        this.notifyStoryOwner(
+          next.storyId,
+          'Zmiana statusu zadania',
+          `Zadanie "${next.nazwa}" zmieniło status na "done".`,
+          'medium',
+        );
+        this.checkAndCloseStory(next.storyId);
+      }
+    }
+
+    return next;
   }
 
   assignUser(taskId: string, userId: string): Task | undefined {
     const task = this.getById(taskId);
     if (!task || task.stan !== 'todo') return undefined;
 
-    const now = new Date().toISOString();
     const updated = this.update(taskId, {
       przypisanyUzytkownikId: userId,
       stan: 'doing',
-      dataStartu: now,
+      dataStartu: new Date().toISOString(),
     });
 
     if (updated) {
-      this.updateStoryIfNeeded(updated.storyId, 'doing');
+      this.notificationService.send({
+        title: 'Przypisanie do zadania',
+        message: `Przypisano Ci zadanie "${updated.nazwa}".`,
+        priority: 'high',
+        recipientId: userId,
+      });
     }
 
     return updated;
@@ -103,17 +156,10 @@ export class TaskStorageService {
     const task = this.getById(taskId);
     if (!task || task.stan !== 'doing') return undefined;
 
-    const now = new Date().toISOString();
-    const updated = this.update(taskId, {
+    return this.update(taskId, {
       stan: 'done',
-      dataZakonczenia: now,
+      dataZakonczenia: new Date().toISOString(),
     });
-
-    if (updated) {
-      this.checkAndCloseStory(updated.storyId);
-    }
-
-    return updated;
   }
 
   private updateStoryIfNeeded(storyId: string, newStatus: 'doing' | 'done'): void {
@@ -137,8 +183,17 @@ export class TaskStorageService {
     const index = tasks.findIndex((t) => t.id === id);
     if (index === -1) return false;
 
-    tasks.splice(index, 1);
-    this.saveToStorage(tasks);
+    const removed = tasks[index];
+    const updated = [...tasks.slice(0, index), ...tasks.slice(index + 1)];
+    this.saveToStorage(updated);
+
+    this.notifyStoryOwner(
+      removed.storyId,
+      'Usunięcie zadania z historyjki',
+      `Usunięto zadanie "${removed.nazwa}".`,
+      'medium',
+    );
+
     return true;
   }
 
@@ -152,5 +207,22 @@ export class TaskStorageService {
     const storyIds = stories.map((s) => s.id);
     const tasks = this.tasksSignal().filter((t) => !storyIds.includes(t.storyId));
     this.saveToStorage(tasks);
+  }
+
+  private notifyStoryOwner(
+    storyId: string,
+    title: string,
+    message: string,
+    priority: 'low' | 'medium' | 'high',
+  ): void {
+    const story = this.storyStorage.getById(storyId);
+    if (!story) return;
+
+    this.notificationService.send({
+      title,
+      message,
+      priority,
+      recipientId: story.wlascicielId,
+    });
   }
 }
