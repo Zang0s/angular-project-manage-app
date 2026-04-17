@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { UserService } from '../../services/user.service';
 import { ProjectStorageService } from '../../services/project-storage.service';
 import { ThemeService } from '../../services/theme.service';
@@ -78,6 +78,23 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
           </svg>
           <span>Powiadomienia</span>
         </a>
+        @if (userService.isAdmin()) {
+          <a routerLink="/users" routerLinkActive="active" class="nav-link">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="icon"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M10 2a4 4 0 100 8 4 4 0 000-8zM2 16a6 6 0 1112 0H2zm14-2a1 1 0 100 2h2a1 1 0 100-2h-2zm1-7a1 1 0 00-1 1v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V8a1 1 0 00-1-1z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <span>Uzytkownicy</span>
+          </a>
+        }
         <a routerLink="/projects" routerLinkActive="active" class="nav-link">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -150,19 +167,18 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
           }
         </button>
 
-        <div class="user-info">
-          <div class="user-avatar">
-            {{ userService.currentUser().imie[0] }}{{ userService.currentUser().nazwisko[0] }}
+        @if (userService.currentUser(); as currentUser) {
+          <div class="user-info">
+            <div class="user-avatar">{{ initials(currentUser.imie, currentUser.nazwisko) }}</div>
+            <div class="user-details">
+              <span class="user-name">{{ currentUser.imie }} {{ currentUser.nazwisko }}</span>
+              <span class="role-badge role-{{ currentUser.rola }}">{{
+                getRoleLabel(currentUser.rola)
+              }}</span>
+            </div>
+            <button class="logout" (click)="logout()">Wyloguj</button>
           </div>
-          <div class="user-details">
-            <span class="user-name"
-              >{{ userService.currentUser().imie }} {{ userService.currentUser().nazwisko }}</span
-            >
-            <span class="role-badge role-{{ userService.currentUser().rola }}">{{
-              getRoleLabel(userService.currentUser().rola)
-            }}</span>
-          </div>
-        </div>
+        }
       </div>
     </header>
   `,
@@ -211,7 +227,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         background: #f3f4f6;
       }
 
-      :global(html.dark) .nav-link:hover {
+      :host-context(html.dark) .nav-link:hover {
         background: #374151;
       }
 
@@ -254,7 +270,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         gap: 0.25rem;
       }
 
-      :global(html.dark) .selector-label {
+      :host-context(html.dark) .selector-label {
         color: #9ca3af;
       }
 
@@ -268,7 +284,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         background: white;
       }
 
-      :global(html.dark) .project-select {
+      :host-context(html.dark) .project-select {
         background: #374151;
         border-color: #4b5563;
         color: #f3f4f6;
@@ -290,7 +306,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         transition: background-color 0.2s;
       }
 
-      :global(html.dark) .theme-toggle {
+      :host-context(html.dark) .theme-toggle {
         color: #d1d5db;
       }
 
@@ -298,7 +314,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         background: #f3f4f6;
       }
 
-      :global(html.dark) .theme-toggle:hover {
+      :host-context(html.dark) .theme-toggle:hover {
         background: #374151;
       }
 
@@ -306,6 +322,20 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         display: flex;
         align-items: center;
         gap: 0.75rem;
+      }
+
+      .logout {
+        border: 0;
+        border-radius: 0.45rem;
+        padding: 0.4rem 0.65rem;
+        background: #475569;
+        color: #fff;
+        cursor: pointer;
+        font-size: 0.8rem;
+      }
+
+      .logout:hover {
+        background: #334155;
       }
 
       .user-avatar {
@@ -332,7 +362,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         font-size: 0.875rem;
       }
 
-      :global(html.dark) .user-name {
+      :host-context(html.dark) .user-name {
         color: #f3f4f6;
       }
 
@@ -347,7 +377,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         background: #e5e7eb;
         color: #374151;
       }
-      :global(html.dark) .role-badge.role-admin {
+      :host-context(html.dark) .role-badge.role-admin {
         background: #4b5563;
         color: #d1d5db;
       }
@@ -356,7 +386,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         background: #dbeafe;
         color: #1d4ed8;
       }
-      :global(html.dark) .role-badge.role-devops {
+      :host-context(html.dark) .role-badge.role-devops {
         background: #1e3a8a;
         color: #93c5fd;
       }
@@ -365,7 +395,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         background: #d1fae5;
         color: #047857;
       }
-      :global(html.dark) .role-badge.role-developer {
+      :host-context(html.dark) .role-badge.role-developer {
         background: #064e3b;
         color: #6ee7b7;
       }
@@ -377,6 +407,9 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
         .user-details {
           display: none;
         }
+        .logout {
+          display: none;
+        }
         .selector-label {
           display: none;
         }
@@ -385,6 +418,7 @@ import { NotificationBadgeComponent } from '../notification-badge/notification-b
   ],
 })
 export class HeaderComponent {
+  private router = inject(Router);
   userService = inject(UserService);
   projectStorage = inject(ProjectStorageService);
   themeService = inject(ThemeService);
@@ -398,6 +432,7 @@ export class HeaderComponent {
       admin: 'Admin',
       devops: 'DevOps',
       developer: 'Developer',
+      guest: 'Guest',
     };
     return labels[rola] || rola;
   }
@@ -409,5 +444,14 @@ export class HeaderComponent {
       system: 'Zgodnie z systemem',
     };
     return labels[this.themeService.theme()];
+  }
+
+  initials(imie: string, nazwisko: string): string {
+    return `${imie?.[0] || ''}${nazwisko?.[0] || ''}`.toUpperCase();
+  }
+
+  logout(): void {
+    this.userService.logout();
+    this.router.navigate(['/login']);
   }
 }

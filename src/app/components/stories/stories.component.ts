@@ -408,6 +408,8 @@ export class StoriesComponent {
 
     const projectId = this.projectStorage.activeProject()?.id;
     if (!projectId) return;
+    const currentUser = this.userService.currentUser();
+    if (!currentUser) return;
 
     const id = this.editingId();
     if (id) {
@@ -416,7 +418,7 @@ export class StoriesComponent {
       this.storyStorage.create({
         ...this.formData,
         projektId: projectId,
-        wlascicielId: this.userService.currentUser().id,
+        wlascicielId: currentUser.id,
       });
     }
 

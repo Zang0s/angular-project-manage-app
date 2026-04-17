@@ -1,5 +1,9 @@
-<app-header></app-header>
+@if (showShell()) {
+  <app-header></app-header>
+}
 <main>
   <router-outlet></router-outlet>
 </main>
-<app-notification-dialog></app-notification-dialog>
+@if (showShell()) {
+  <app-notification-dialog></app-notification-dialog>
+}
