@@ -18,7 +18,9 @@ export class NotificationService {
   readonly activeDialog = this.activeDialogSignal.asReadonly();
 
   readonly currentUserNotifications = computed(() => {
-    const currentUserId = this.userService.currentUser().id;
+    const currentUser = this.userService.currentUser();
+    if (!currentUser) return [];
+    const currentUserId = currentUser.id;
     return this.notificationsSignal()
       .filter((n) => n.recipientId === currentUserId)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -79,7 +81,9 @@ export class NotificationService {
   }
 
   getByIdForCurrentUser(id: string): AppNotification | undefined {
-    const currentUserId = this.userService.currentUser().id;
+    const currentUser = this.userService.currentUser();
+    if (!currentUser) return undefined;
+    const currentUserId = currentUser.id;
     return this.notificationsSignal().find((n) => n.id === id && n.recipientId === currentUserId);
   }
 
@@ -99,7 +103,9 @@ export class NotificationService {
   }
 
   markAllAsReadForCurrentUser(): void {
-    const currentUserId = this.userService.currentUser().id;
+    const currentUser = this.userService.currentUser();
+    if (!currentUser) return;
+    const currentUserId = currentUser.id;
     const updated = this.notificationsSignal().map((n) =>
       n.recipientId === currentUserId ? { ...n, isRead: true } : n,
     );
@@ -129,7 +135,9 @@ export class NotificationService {
   private tryOpenDialog(notification: AppNotification): void {
     if (notification.priority === 'low') return;
 
-    const currentUserId = this.userService.currentUser().id;
+    const currentUser = this.userService.currentUser();
+    if (!currentUser) return;
+    const currentUserId = currentUser.id;
     if (notification.recipientId !== currentUserId) return;
 
     if (!this.activeDialogSignal()) {
