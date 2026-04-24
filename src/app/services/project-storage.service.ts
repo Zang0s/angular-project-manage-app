@@ -2,6 +2,7 @@ import { Injectable, signal, computed } from '@angular/core';
 import { Project } from '../models/project.model';
 import { UserService } from './user.service';
 import { NotificationService } from './notification.service';
+import { DataStorageService } from './data-storage.service';
 
 const STORAGE_KEY = 'manageme_projects';
 const ACTIVE_PROJECT_KEY = 'manageme_active_project';
@@ -24,36 +25,38 @@ export class ProjectStorageService {
   constructor(
     private userService: UserService,
     private notificationService: NotificationService,
+    private dataStorage: DataStorageService,
   ) {
-    if (typeof localStorage !== 'undefined') {
-      this.projectsSignal.set(this.loadFromStorage());
-      this.activeProjectIdSignal.set(this.loadActiveProjectId());
+    if (this.dataStorage.isClient()) {
+      void this.initialize();
     }
   }
 
-  private loadFromStorage(): Project[] {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+  private async initialize(): Promise<void> {
+    this.projectsSignal.set(await this.loadFromStorage());
+    this.activeProjectIdSignal.set(await this.loadActiveProjectId());
   }
 
-  private loadActiveProjectId(): string | null {
-    return localStorage.getItem(ACTIVE_PROJECT_KEY);
+  private async loadFromStorage(): Promise<Project[]> {
+    return this.dataStorage.read<Project[]>(STORAGE_KEY, []);
+  }
+
+  private async loadActiveProjectId(): Promise<string | null> {
+    return this.dataStorage.read<string | null>(ACTIVE_PROJECT_KEY, null);
   }
 
   private saveToStorage(projects: Project[]): void {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
     this.projectsSignal.set(projects);
+    void this.dataStorage.write(STORAGE_KEY, projects);
   }
 
   private saveActiveProjectId(id: string | null): void {
-    if (typeof localStorage === 'undefined') return;
-    if (id) {
-      localStorage.setItem(ACTIVE_PROJECT_KEY, id);
-    } else {
-      localStorage.removeItem(ACTIVE_PROJECT_KEY);
-    }
     this.activeProjectIdSignal.set(id);
+    if (id) {
+      void this.dataStorage.write(ACTIVE_PROJECT_KEY, id);
+    } else {
+      void this.dataStorage.remove(ACTIVE_PROJECT_KEY);
+    }
   }
 
   getAll(): Project[] {

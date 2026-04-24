@@ -2,6 +2,7 @@ import { Inject, Injectable, PLATFORM_ID, computed, signal } from '@angular/core
 import { isPlatformBrowser } from '@angular/common';
 import { SUPER_ADMIN_EMAIL } from '../app.settings';
 import { User, UserRole } from '../models/user.model';
+import { DataStorageService } from './data-storage.service';
 
 type GooglePayload = {
   sub?: string;
@@ -26,8 +27,11 @@ export class UserService {
   private readonly isBrowser: boolean;
   private usersSignal = signal<User[]>([]);
   private currentUserIdSignal = signal<string | null>(null);
+  private initializedSignal = signal(false);
+  private initPromise: Promise<void> | null = null;
 
   readonly users = this.usersSignal.asReadonly();
+  readonly initialized = this.initializedSignal.asReadonly();
   readonly currentUser = computed<User | null>(() => {
     const id = this.currentUserIdSignal();
     if (!id) return null;
@@ -37,19 +41,30 @@ export class UserService {
   readonly isAuthenticated = computed(() => !!this.currentUser());
   readonly isAdmin = computed(() => this.currentUser()?.rola === 'admin');
 
-  constructor(@Inject(PLATFORM_ID) platformId: Object) {
+  constructor(
+    @Inject(PLATFORM_ID) platformId: Object,
+    private dataStorage: DataStorageService,
+  ) {
     this.isBrowser = isPlatformBrowser(platformId);
 
     if (this.isBrowser) {
-      this.usersSignal.set(this.loadUsers());
       const currentUserId = localStorage.getItem(SESSION_STORAGE_KEY);
       this.currentUserIdSignal.set(currentUserId);
-
-      if (currentUserId && !this.usersSignal().some((u) => u.id === currentUserId)) {
-        this.currentUserIdSignal.set(null);
-        localStorage.removeItem(SESSION_STORAGE_KEY);
-      }
+      this.initPromise = this.initialize();
+    } else {
+      this.initializedSignal.set(true);
     }
+  }
+
+  async ensureInitialized(): Promise<void> {
+    if (this.initializedSignal()) return;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+
+    this.initPromise = this.initialize();
+    await this.initPromise;
   }
 
   getAll(): User[] {
@@ -107,7 +122,9 @@ export class UserService {
     }
   }
 
-  loginWithGoogleCredential(credential: string): LoginResult {
+  async loginWithGoogleCredential(credential: string): Promise<LoginResult> {
+    await this.ensureInitialized();
+
     if (!this.isBrowser) {
       throw new Error('Logowanie OAuth jest dostepne tylko w przegladarce.');
     }
@@ -160,6 +177,20 @@ export class UserService {
     return { user: newUser, isNewUser: true };
   }
 
+  private async initialize(): Promise<void> {
+    const loaded = await this.dataStorage.read<unknown[]>(USERS_STORAGE_KEY, []);
+    const normalized = Array.isArray(loaded) ? loaded.map((raw) => this.normalizeUser(raw)) : [];
+    this.usersSignal.set(normalized);
+
+    const currentUserId = this.currentUserIdSignal();
+    if (currentUserId && !normalized.some((u) => u.id === currentUserId)) {
+      this.currentUserIdSignal.set(null);
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+
+    this.initializedSignal.set(true);
+  }
+
   private setCurrentUserId(userId: string): void {
     this.currentUserIdSignal.set(userId);
     if (this.isBrowser) {
@@ -167,24 +198,9 @@ export class UserService {
     }
   }
 
-  private loadUsers(): User[] {
-    const data = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!data) return [];
-
-    try {
-      const parsed = JSON.parse(data) as unknown[];
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((raw) => this.normalizeUser(raw));
-    } catch {
-      return [];
-    }
-  }
-
   private saveUsers(users: User[]): void {
     this.usersSignal.set(users);
-    if (this.isBrowser) {
-      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-    }
+    void this.dataStorage.write(USERS_STORAGE_KEY, users);
   }
 
   private normalizeUser(raw: unknown): User {

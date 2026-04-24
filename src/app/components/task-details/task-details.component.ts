@@ -396,9 +396,10 @@ export class TaskDetailsComponent implements OnInit {
 
   availableUsers = computed(() => this.userService.getDevelopersAndDevops());
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
     const id = this.route.snapshot.paramMap.get('id');
     if (id) {
+      await this.taskStorage.ensureInitialized();
       const t = this.taskStorage.getById(id);
       this.task.set(t || null);
       if (t) {

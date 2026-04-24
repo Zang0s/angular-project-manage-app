@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { Task, TaskStatus } from '../models/task.model';
 import { StoryStorageService } from './story-storage.service';
 import { NotificationService } from './notification.service';
+import { DataStorageService } from './data-storage.service';
 
 const STORAGE_KEY = 'manageme_tasks';
 
@@ -10,27 +11,47 @@ const STORAGE_KEY = 'manageme_tasks';
 })
 export class TaskStorageService {
   private tasksSignal = signal<Task[]>([]);
+  private initializedSignal = signal(false);
+  private initPromise: Promise<void> | null = null;
 
   readonly tasks = this.tasksSignal.asReadonly();
+  readonly initialized = this.initializedSignal.asReadonly();
 
   constructor(
     private storyStorage: StoryStorageService,
     private notificationService: NotificationService,
+    private dataStorage: DataStorageService,
   ) {
-    if (typeof localStorage !== 'undefined') {
-      this.tasksSignal.set(this.loadFromStorage());
+    if (this.dataStorage.isClient()) {
+      this.initPromise = this.initialize();
+    } else {
+      this.initializedSignal.set(true);
     }
   }
 
-  private loadFromStorage(): Task[] {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+  async ensureInitialized(): Promise<void> {
+    if (this.initializedSignal()) return;
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+
+    this.initPromise = this.initialize();
+    await this.initPromise;
+  }
+
+  private async initialize(): Promise<void> {
+    this.tasksSignal.set(await this.loadFromStorage());
+    this.initializedSignal.set(true);
+  }
+
+  private async loadFromStorage(): Promise<Task[]> {
+    return this.dataStorage.read<Task[]>(STORAGE_KEY, []);
   }
 
   private saveToStorage(tasks: Task[]): void {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
     this.tasksSignal.set(tasks);
+    void this.dataStorage.write(STORAGE_KEY, tasks);
   }
 
   getAll(): Task[] {
