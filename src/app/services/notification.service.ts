@@ -2,6 +2,7 @@ import { Inject, Injectable, PLATFORM_ID, computed, signal } from '@angular/core
 import { isPlatformBrowser } from '@angular/common';
 import { UserService } from './user.service';
 import { AppNotification, NotificationInput } from '../models/notification.model';
+import { DataStorageService } from './data-storage.service';
 
 const STORAGE_KEY = 'manageme_notifications';
 
@@ -33,11 +34,16 @@ export class NotificationService {
   constructor(
     @Inject(PLATFORM_ID) platformId: Object,
     private userService: UserService,
+    private dataStorage: DataStorageService,
   ) {
     this.isBrowser = isPlatformBrowser(platformId);
     if (this.isBrowser) {
-      this.notificationsSignal.set(this.loadFromStorage());
+      void this.initialize();
     }
+  }
+
+  private async initialize(): Promise<void> {
+    this.notificationsSignal.set(await this.loadFromStorage());
   }
 
   send(input: NotificationInput): AppNotification {
@@ -148,15 +154,14 @@ export class NotificationService {
     this.dialogQueueSignal.set([...this.dialogQueueSignal(), notification]);
   }
 
-  private loadFromStorage(): AppNotification[] {
+  private async loadFromStorage(): Promise<AppNotification[]> {
     if (!this.isBrowser) return [];
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    return this.dataStorage.read<AppNotification[]>(STORAGE_KEY, []);
   }
 
   private saveToStorage(notifications: AppNotification[]): void {
     if (!this.isBrowser) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
+    void this.dataStorage.write(STORAGE_KEY, notifications);
     this.notificationsSignal.set(notifications);
   }
 }

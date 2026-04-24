@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Story, StoryStatus } from '../models/story.model';
 import { NotificationService } from './notification.service';
+import { DataStorageService } from './data-storage.service';
 
 const STORAGE_KEY = 'manageme_stories';
 
@@ -12,21 +13,26 @@ export class StoryStorageService {
 
   readonly stories = this.storiesSignal.asReadonly();
 
-  constructor(private notificationService: NotificationService) {
-    if (typeof localStorage !== 'undefined') {
-      this.storiesSignal.set(this.loadFromStorage());
+  constructor(
+    private notificationService: NotificationService,
+    private dataStorage: DataStorageService,
+  ) {
+    if (this.dataStorage.isClient()) {
+      void this.initialize();
     }
   }
 
-  private loadFromStorage(): Story[] {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+  private async initialize(): Promise<void> {
+    this.storiesSignal.set(await this.loadFromStorage());
+  }
+
+  private async loadFromStorage(): Promise<Story[]> {
+    return this.dataStorage.read<Story[]>(STORAGE_KEY, []);
   }
 
   private saveToStorage(stories: Story[]): void {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stories));
     this.storiesSignal.set(stories);
+    void this.dataStorage.write(STORAGE_KEY, stories);
   }
 
   getAll(): Story[] {

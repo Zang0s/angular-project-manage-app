@@ -158,6 +158,8 @@ export class LoginComponent implements AfterViewInit {
   async ngAfterViewInit(): Promise<void> {
     if (!this.isBrowser) return;
 
+    await this.userService.ensureInitialized();
+
     if (this.isClientIdMissing()) {
       this.error.set('Brak konfiguracji OAuth Google.');
       return;
@@ -183,7 +185,9 @@ export class LoginComponent implements AfterViewInit {
 
     window.google.accounts.id.initialize({
       client_id: RESOLVED_GOOGLE_CLIENT_ID,
-      callback: ({ credential }) => this.handleCredential(credential),
+      callback: ({ credential }) => {
+        void this.handleCredential(credential);
+      },
     });
 
     window.google.accounts.id.renderButton(this.googleButtonRef.nativeElement, {
@@ -195,9 +199,9 @@ export class LoginComponent implements AfterViewInit {
     });
   }
 
-  private handleCredential(credential: string): void {
+  private async handleCredential(credential: string): Promise<void> {
     try {
-      const result = this.userService.loginWithGoogleCredential(credential);
+      const result = await this.userService.loginWithGoogleCredential(credential);
 
       if (result.isNewUser) {
         const admins = this.userService.getByRole('admin');

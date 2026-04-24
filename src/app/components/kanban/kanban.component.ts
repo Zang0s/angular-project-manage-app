@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { TaskStorageService } from '../../services/task-storage.service';
 import { ProjectStorageService } from '../../services/project-storage.service';
 import { StoryStorageService } from '../../services/story-storage.service';
@@ -321,6 +322,7 @@ import { User } from '../../models/user.model';
   ],
 })
 export class KanbanComponent {
+  private router = inject(Router);
   taskStorage = inject(TaskStorageService);
   projectStorage = inject(ProjectStorageService);
   storyStorage = inject(StoryStorageService);
@@ -350,7 +352,7 @@ export class KanbanComponent {
   }
 
   goToDetails(taskId: string): void {
-    window.location.href = `/tasks/${taskId}`;
+    void this.router.navigate(['/tasks', taskId]);
   }
 
   getStoryName(storyId: string): string {

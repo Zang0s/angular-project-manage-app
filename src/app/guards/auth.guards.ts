@@ -2,10 +2,12 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { UserService } from '../services/user.service';
 
-export const loginPageGuard: CanActivateFn = () => {
+export const loginPageGuard: CanActivateFn = async () => {
   const router = inject(Router);
-  const user = inject(UserService).currentUser();
+  const userService = inject(UserService);
+  await userService.ensureInitialized();
 
+  const user = userService.currentUser();
   if (!user) return true;
   if (user.isBlocked) return router.createUrlTree(['/blocked']);
   if (user.rola === 'guest') return router.createUrlTree(['/pending-approval']);
@@ -13,9 +15,12 @@ export const loginPageGuard: CanActivateFn = () => {
   return router.createUrlTree(['/']);
 };
 
-export const authGuard: CanActivateFn = (_route, state) => {
+export const authGuard: CanActivateFn = async (_route, state) => {
   const router = inject(Router);
-  const user = inject(UserService).currentUser();
+  const userService = inject(UserService);
+  await userService.ensureInitialized();
+
+  const user = userService.currentUser();
   if (user) return true;
 
   return router.createUrlTree(['/login'], {
@@ -23,10 +28,12 @@ export const authGuard: CanActivateFn = (_route, state) => {
   });
 };
 
-export const approvedGuard: CanActivateFn = () => {
+export const approvedGuard: CanActivateFn = async () => {
   const router = inject(Router);
-  const user = inject(UserService).currentUser();
+  const userService = inject(UserService);
+  await userService.ensureInitialized();
 
+  const user = userService.currentUser();
   if (!user) return router.createUrlTree(['/login']);
   if (user.isBlocked) return router.createUrlTree(['/blocked']);
   if (user.rola === 'guest') return router.createUrlTree(['/pending-approval']);
@@ -34,10 +41,12 @@ export const approvedGuard: CanActivateFn = () => {
   return true;
 };
 
-export const adminGuard: CanActivateFn = () => {
+export const adminGuard: CanActivateFn = async () => {
   const router = inject(Router);
-  const user = inject(UserService).currentUser();
+  const userService = inject(UserService);
+  await userService.ensureInitialized();
 
+  const user = userService.currentUser();
   if (!user) return router.createUrlTree(['/login']);
   if (user.isBlocked) return router.createUrlTree(['/blocked']);
   if (user.rola !== 'admin') return router.createUrlTree(['/']);
@@ -45,10 +54,12 @@ export const adminGuard: CanActivateFn = () => {
   return true;
 };
 
-export const pendingViewGuard: CanActivateFn = () => {
+export const pendingViewGuard: CanActivateFn = async () => {
   const router = inject(Router);
-  const user = inject(UserService).currentUser();
+  const userService = inject(UserService);
+  await userService.ensureInitialized();
 
+  const user = userService.currentUser();
   if (!user) return router.createUrlTree(['/login']);
   if (user.isBlocked) return router.createUrlTree(['/blocked']);
   if (user.rola !== 'guest') return router.createUrlTree(['/']);
@@ -56,10 +67,12 @@ export const pendingViewGuard: CanActivateFn = () => {
   return true;
 };
 
-export const blockedViewGuard: CanActivateFn = () => {
+export const blockedViewGuard: CanActivateFn = async () => {
   const router = inject(Router);
-  const user = inject(UserService).currentUser();
+  const userService = inject(UserService);
+  await userService.ensureInitialized();
 
+  const user = userService.currentUser();
   if (!user) return router.createUrlTree(['/login']);
   if (!user.isBlocked) {
     if (user.rola === 'guest') return router.createUrlTree(['/pending-approval']);
