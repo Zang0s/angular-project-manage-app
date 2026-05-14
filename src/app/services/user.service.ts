@@ -19,6 +19,7 @@ export type LoginResult = {
 
 const USERS_STORAGE_KEY = 'manageme_users';
 const SESSION_STORAGE_KEY = 'manageme_current_user';
+const DEFAULT_DEVELOPER_EMAIL = 'developer@manageme.local';
 
 @Injectable({
   providedIn: 'root',
@@ -180,10 +181,11 @@ export class UserService {
   private async initialize(): Promise<void> {
     const loaded = await this.dataStorage.read<unknown[]>(USERS_STORAGE_KEY, []);
     const normalized = Array.isArray(loaded) ? loaded.map((raw) => this.normalizeUser(raw)) : [];
-    this.usersSignal.set(normalized);
+    const usersWithDefaultDeveloper = this.ensureDefaultDeveloper(normalized);
+    this.usersSignal.set(usersWithDefaultDeveloper);
 
     const currentUserId = this.currentUserIdSignal();
-    if (currentUserId && !normalized.some((u) => u.id === currentUserId)) {
+    if (currentUserId && !usersWithDefaultDeveloper.some((u) => u.id === currentUserId)) {
       this.currentUserIdSignal.set(null);
       localStorage.removeItem(SESSION_STORAGE_KEY);
     }
@@ -201,6 +203,25 @@ export class UserService {
   private saveUsers(users: User[]): void {
     this.usersSignal.set(users);
     void this.dataStorage.write(USERS_STORAGE_KEY, users);
+  }
+
+  private ensureDefaultDeveloper(users: User[]): User[] {
+    const exists = users.some((u) => u.email.toLowerCase() === DEFAULT_DEVELOPER_EMAIL);
+    if (exists) return users;
+
+    const seededDeveloper: User = {
+      id: crypto.randomUUID(),
+      email: DEFAULT_DEVELOPER_EMAIL,
+      imie: 'Dev',
+      nazwisko: 'User',
+      rola: 'developer',
+      isBlocked: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedUsers = [...users, seededDeveloper];
+    void this.dataStorage.write(USERS_STORAGE_KEY, updatedUsers);
+    return updatedUsers;
   }
 
   private normalizeUser(raw: unknown): User {
